@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Dijkstra's Algorithm Editable Demo</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; }
+    #controls { margin: 10px; }
+    svg { border: 1px solid #ccc; background: #f9f9f9; margin-top: 10px; }
+    .node { fill: #69b3a2; cursor: pointer; }
+    .node.selected { stroke: orange; stroke-width: 3px; }
+    .edge { stroke: #999; stroke-width: 2px; }
+    .edge.path { stroke: red; stroke-width: 3px; }
+    .weight { fill: #000; font-size: 12px; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <h2>Dijkstra's Algorithm Editable Demo</h2>
+  <div id="controls">
+    <button id="addNodeBtn">Add Node</button>
+    <button id="resetBtn">Clear Graph</button>
+    &nbsp;&nbsp;
+    <!-- New Edge Interface -->
+    <label for="edgeFrom">From:</label>
+    <select id="edgeFrom"></select>
+    <label for="edgeTo">To:</label>
+    <select id="edgeTo"></select>
+    <label for="edgeWeight">Weight:</label>
+    <input id="edgeWeight" type="number" value="1" style="width:50px;">
+    <button id="addEdgeBtn">Add Edge</button>
+    <br><br>
+    Source:
+    <select id="source"></select>
+    Target:
+    <select id="target"></select>
+    <button id="findBtn">Find Shortest Path</button>
+  </div>
+  <svg id="graph" width="600" height="400"></svg>
+  <script>
+    // Initial graph data
+    let nodes = { A:{x:100,y:300}, B:{x:200,y:100}, C:{x:300,y:300}, D:{x:400,y:100}, E:{x:450,y:300}, F:{x:550,y:150} };
+    let edges = [
+      {from:'A',to:'B',weight:4}, {from:'A',to:'C',weight:2}, {from:'B',to:'C',weight:1},
+      {from:'B',to:'D',weight:5}, {from:'C',to:'D',weight:8}, {from:'C',to:'E',weight:10},
+      {from:'D',to:'E',weight:2}, {from:'D',to:'F',weight:6}, {from:'E',to:'F',weight:2}
+    ];
+    let adj = {};
+    let nextNodeId = Object.keys(nodes).length;
+    const svg = document.getElementById('graph');
+    let dragTarget = null, offset = null;
+
+    // Build adjacency list from nodes and edges
+    function buildAdj() {
+      adj = {};
+      Object.keys(nodes).forEach(n => adj[n] = []);
+      edges.forEach(e => {
+        if(nodes[e.from] && nodes[e.to]){
+          adj[e.from].push({node: e.to, weight: e.weight});
+          adj[e.to].push({node: e.from, weight: e.weight});
+        }
+      });
+    }
+
+    // Render SVG elements and UI
+    function render() {
+      svg.innerHTML = '';
+      buildAdj();
+      drawEdges();
+      drawNodes();
+      populateSelects();
+      populateEdgeUI();
+    }
+
+    // Draw edges with weights
+    function drawEdges() {
+      edges.forEach((e, idx) => {
+        if(nodes[e.from] && nodes[e.to]){
+          const x1 = nodes[e.from].x, y1 = nodes[e.from].y;
+          const x2 = nodes[e.to].x, y2 = nodes[e.to].y;
+          const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+          line.setAttribute('x1', x1);
+          line.setAttribute('y1', y1);
+          line.setAttribute('x2', x2);
+          line.setAttribute('y2', y2);
+          line.classList.add('edge');
+          line.id = `edge-${idx}`;
+          svg.appendChild(line);
+          const text = document.createElementNS('http://www.w3.org/2000/svg','text');
+          text.setAttribute('x', (x1 + x2) / 2);
+          text.setAttribute('y', (y1 + y2) / 2 - 5);
+          text.classList.add('weight');
+          text.textContent = e.weight;
+          svg.appendChild(text);
+        }
+      });
+    }
+
+    // Draw nodes with drag behavior
+    function drawNodes() {
+      Object.entries(nodes).forEach(([id, pos]) => {
+        const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+        circle.setAttribute('cx', pos.x);
+        circle.setAttribute('cy', pos.y);
+        circle.setAttribute('r', 20);
+        circle.classList.add('node');
+        circle.id = `node-${id}`;
+        svg.appendChild(circle);
+        const label = document.createElementNS('http://www.w3.org/2000/svg','text');
+        label.setAttribute('x', pos.x);
+        label.setAttribute('y', pos.y + 4);
+        label.setAttribute('text-anchor', 'middle');
+        label.setAttribute('fill', '#fff');
+        label.setAttribute('font-size', '14px');
+        label.textContent = id;
+        svg.appendChild(label);
+
+        circle.addEventListener('mousedown', e => {
+          dragTarget = id;
+          offset = { x: pos.x - e.offsetX, y: pos.y - e.offsetY };
+          e.stopPropagation();
+        });
+      });
+    }
+
+    // Handle dragging nodes
+    svg.addEventListener('mousemove', e => {
+      if (dragTarget) {
+        nodes[dragTarget].x = e.offsetX + offset.x;
+        nodes[dragTarget].y = e.offsetY + offset.y;
+        render();
+      }
+    });
+    svg.addEventListener('mouseup', () => { dragTarget = null; });
+
+    // Add node on background click
+    svg.addEventListener('click', e => {
+      if (e.target === svg) {
+        const id = String.fromCharCode(65 + nextNodeId);
+        nodes[id] = { x: e.offsetX, y: e.offsetY };
+        nextNodeId++;
+        render();
+      }
+    });
+
+    // Populate source/target selects
+    function populateSelects() {
+      const src = document.getElementById('source');
+      const tgt = document.getElementById('target');
+      src.innerHTML = '';
+      tgt.innerHTML = '';
+      Object.keys(nodes).forEach(n => {
+        src.appendChild(new Option(n, n));
+        tgt.appendChild(new Option(n, n));
+      });
+    }
+
+    // Populate edge-from/to selects
+    function populateEdgeUI() {
+      const fromSel = document.getElementById('edgeFrom');
+      const toSel = document.getElementById('edgeTo');
+      fromSel.innerHTML = '';
+      toSel.innerHTML = '';
+      Object.keys(nodes).forEach(n => {
+        fromSel.appendChild(new Option(n, n));
+        toSel.appendChild(new Option(n, n));
+      });
+    }
+
+    // Add edge button
+    document.getElementById('addEdgeBtn').addEventListener('click', () => {
+      const from = document.getElementById('edgeFrom').value;
+      const to = document.getElementById('edgeTo').value;
+      const w = parseFloat(document.getElementById('edgeWeight').value);
+      if (from && to && !isNaN(w) && from !== to) {
+        edges.push({ from, to, weight: w });
+        render();
+      } else {
+        alert('Select two different nodes and enter a valid weight.');
+      }
+    });
+
+    // Add node button
+    document.getElementById('addNodeBtn').addEventListener('click', () => {
+      const id = String.fromCharCode(65 + nextNodeId);
+      nodes[id] = { x: 50 + 30 * nextNodeId, y: 50 };
+      nextNodeId++;
+      render();
+    });
+
+    // Reset/clear graph button
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      nodes = {};
+      edges = [];
+      nextNodeId = 0;
+      render();
+    });
+
+    // Find shortest path button
+    document.getElementById('findBtn').addEventListener('click', () => {
+      const s = document.getElementById('source').value;
+      const t = document.getElementById('target').value;
+      const { prev } = dijkstra(s);
+      drawPath(prev, s, t);
+    });
+
+    // Dijkstra implementation
+    function dijkstra(start) {
+      const dist = {}, prev = {}, Q = new Set();
+      Object.keys(nodes).forEach(n => { dist[n] = Infinity; prev[n] = null; Q.add(n); });
+      dist[start] = 0;
+      while (Q.size) {
+        let u;
+        Q.forEach(v => { if (u === undefined || dist[v] < dist[u]) u = v; });
+        Q.delete(u);
+        adj[u].forEach(({ node: v, weight: w }) => {
+          if (Q.has(v) && dist[u] + w < dist[v]) {
+            dist[v] = dist[u] + w;
+            prev[v] = u;
+          }
+        });
+      }
+      return { dist, prev };
+    }
+
+    // Draw the computed shortest path
+    function drawPath(prev, start, target) {
+      document.querySelectorAll('.edge').forEach(e => e.classList.remove('path'));
+      document.querySelectorAll('.node').forEach(n => n.classList.remove('selected'));
+      let u = target;
+      const path = [];
+      while (prev[u]) { path.push([prev[u], u]); u = prev[u]; }
+      if (u !== start) { alert('No path!'); return; }
+      path.forEach(([u, v]) => {
+        edges.forEach((e, idx) => {
+          if ((e.from === u && e.to === v) || (e.from === v && e.to === u)) {
+            document.getElementById(`edge-${idx}`).classList.add('path');
+          }
+        });
+        document.getElementById(`node-${u}`).classList.add('selected');
+        document.getElementById(`node-${v}`).classList.add('selected');
+      });
+    }
+
+    // Initial render
+    render();
+  </script>
+</body>
+</html>
